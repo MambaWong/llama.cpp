@@ -102,15 +102,16 @@ bool llama_batch_allocr::init(
         }
 
         for (int32_t i = 0; i < batch.n_tokens; i++) {
-            const llama_seq_id seq_id = batch.seq_id[i][0];
+            const llama_seq_id seq_id = batch.seq_id[i][0];    // sequence id
 
-            pos[i] = p0[seq_id];
+            pos[i] = p0[seq_id];  // 获取当前序列的 token 位置
 
             // update the starting position for all sequences that are assigned to the this token
+            // 当一个 token 同时属于多个序列（n_seq_id[i] > 1）时，这代表这些序列在当前位置共享同一个 token。既然是同一个 token，那么它在所有共享序列中的位置索引（Position ID）必然相同。
             for (int32_t s = 0; s < batch.n_seq_id[i]; ++s) {
                 const llama_seq_id seq_id = batch.seq_id[i][s];
 
-                p0[seq_id] = pos[i] + 1;
+                p0[seq_id] = pos[i] + 1;  // 将当前 token 所属的所有序列的游标都推进到 pos[i] + 1
             }
         }
 
@@ -161,22 +162,23 @@ bool llama_batch_allocr::init(
 
     // determine coupled sequences
     // these are pairs of sequences that have at least one token in the input batch that is assigned to both of them
+    // 检测并记录“耦合序列对”（coupled sequences）。识别出哪些序列在当前 batch 中共享了同一个 token，从而为后续的 KV Cache 同步/复制操作提供精确的依赖关系图。
     for (int32_t i = 0; i < batch.n_tokens; ++i) {
         const llama_seq_id s0 = batch.seq_id[i][0];
 
         for (int32_t s = 0; s < batch.n_seq_id[i]; ++s) {
             const llama_seq_id s1 = batch.seq_id[i][s];
 
-            seq_pos[s1].insert(batch.pos[i]);
+            seq_pos[s1].insert(batch.pos[i]);    // 记录当前序列在本 batch 中 token 出现的所有位置
 
-            if (s > 0) {
+            if (s > 0) {    // 只有非首个序列才标记耦合
                 // mark that sequence s1 is coupled to s0
-                seq_cpl[s1][s0] = true;
+                seq_cpl[s1][s0] = true;    // 标记 s1 与 s0 耦合（单向）
 
                 // note: tracking the other way around is not necessary for now
                 //seq_cpl[s0][s1] = true;
 
-                has_cpl = true;
+                has_cpl = true;    // 全局标志：本 batch 存在耦合
             }
         }
     }
@@ -186,22 +188,23 @@ bool llama_batch_allocr::init(
         seq_set_t seq_set_unq;
 
         for (int32_t i = 0; i < batch.n_tokens; ++i) {
-            seq_set_t cur;
+            seq_set_t cur;    // std::bitset<LLAMA_MAX_SEQ>
             for (int32_t s = 0; s < batch.n_seq_id[i]; ++s) {
-                const llama_seq_id seq_id = batch.seq_id[i][s];
+                const llama_seq_id seq_id = batch.seq_id[i][s];    // sequence id
 
-                cur        .set(seq_id);
-                seq_set_unq.set(seq_id);
+                cur        .set(seq_id);    // 记录当前 token 属于哪些序列
+                seq_set_unq.set(seq_id);    // 记录当前 batch 包含哪些序列
             }
 
-            seq_set.push_back(cur);
-            seq_set_map[cur].push_back(i);
+            seq_set.push_back(cur);    // 保存该 token 的序列位图
+            // 共享是一个前缀属性，不是一个孤立 token 的属性。
+            seq_set_map[cur].push_back(i);    // 按序列位图索引 token id
         }
 
         for (uint32_t s = 0; s < n_seq_max; ++s) {
             if (seq_set_unq.test(s)) {
-                seq_idx[s] = seq_id_unq.size();
-                seq_id_unq.push_back(s);
+                seq_idx[s] = seq_id_unq.size();    // 序列全局ID → 局部连续索引
+                seq_id_unq.push_back(s);    // 记录活跃序列的全局ID
             }
         }
     }
@@ -288,6 +291,7 @@ bool llama_batch_allocr::init(
         }
     } else {
         for (uint32_t s = 0; s < n_seq_max; ++s) {
+            // 当前 sequence 不包含任何 token
             if (seq_pos[s].empty()) {
                 continue;
             }
@@ -352,14 +356,14 @@ bool llama_batch_allocr::init(
     // seq_id[i][0]: 0 0 1 1 0 1 0
     //
     {
-        seq_set_t cur_seq_set[LLAMA_MAX_SEQ];
+        seq_set_t cur_seq_set[LLAMA_MAX_SEQ];    // 每个序列的"当前兼容集合"
         for (uint32_t s = 0; s < n_seq_max; ++s) {
-            cur_seq_set[s].set();
+            cur_seq_set[s].set();    // 初始化为全1（全集）
         }
 
-        llama_pos cur_seq_pos[LLAMA_MAX_SEQ];
+        llama_pos cur_seq_pos[LLAMA_MAX_SEQ];    // 每个序列的"当前兼容集合"
         for (uint32_t s = 0; s < n_seq_max; ++s) {
-            cur_seq_pos[s] = -1;
+            cur_seq_pos[s] = -1;    // 初始化为-1（哨兵值）
         }
 
         for (int32_t i = 0; i < batch.n_tokens; ++i) {
@@ -370,11 +374,13 @@ bool llama_batch_allocr::init(
 
                 cur_seq_set[seq_id] &= seq_set[i];
 
+                // 校验1: 序列归属兼容性
                 if (cur_seq_set[seq_id].none()) {
                     LLAMA_LOG_ERROR("%s: sequence %d belongs to incompatible sequence sets (not allowed)\n", __func__, seq_id);
                     return false;
                 }
 
+                // 校验2: 位置单调性
                 if (pos < cur_seq_pos[seq_id]) {
                     LLAMA_LOG_ERROR("%s: sequence %d positions are decreasing (not allowed)\n", __func__, seq_id);
                     return false;
@@ -495,10 +501,12 @@ llama_ubatch llama_batch_allocr::split_simple(uint32_t n_ubatch) {
 
         ++cur_idx;
 
+        // 到达 batch 末尾
         if (cur_idx >= used.size()) {
             break;
         }
 
+        // 达到 ubatch 上限
         if (idxs.size() >= n_ubatch) {
             break;
         }
@@ -508,6 +516,7 @@ llama_ubatch llama_batch_allocr::split_simple(uint32_t n_ubatch) {
 }
 
 llama_ubatch llama_batch_allocr::split_equal(uint32_t n_ubatch, bool sequential, uint32_t n_keep_tail) {
+    // 期望每个 token 只属于一个序列
     if (sequential && has_cpl) {
         LLAMA_LOG_ERROR("%s: sequential split is not supported when there are coupled sequences in the input batch (you may need to use the -kvu flag)\n", __func__);
 
@@ -535,6 +544,7 @@ llama_ubatch llama_batch_allocr::split_equal(uint32_t n_ubatch, bool sequential,
         }
 
         // accept only increasing sequence ids
+        // 序列必须是顺序递增的
         if (sequential) {
             add = add && (cur_seq_set.empty() || batch.seq_id[i][0] == last_seq_id + 1);
         }

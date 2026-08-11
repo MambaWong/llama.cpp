@@ -78,9 +78,9 @@ struct time_meas {
     time_meas(int64_t & t_acc, bool disable = false);
     ~time_meas();
 
-    const int64_t t_start_us;
+    const int64_t t_start_us;    // 开始时间
 
-    int64_t & t_acc;
+    int64_t & t_acc;    // 累加的总时间
 };
 
 template <typename T>

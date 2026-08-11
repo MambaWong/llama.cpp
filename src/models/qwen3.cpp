@@ -15,6 +15,7 @@ void llama_model_qwen3::load_arch_hparams(llama_model_loader & ml) {
 void llama_model_qwen3::load_arch_tensors(llama_model_loader &) {
     LLAMA_LOAD_LOCALS;
 
+    // token Embedding Matrix
     tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, 0);
 
     // output

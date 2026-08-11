@@ -2284,16 +2284,16 @@ const std::initializer_list<std::pair<uint32_t, uint16_t>> unicode_ranges_flags 
 };
 
 const std::unordered_set<uint32_t> unicode_set_whitespace = {
-0x000009,
-0x00000A,
-0x00000B,
+0x000009,    // \t (制表)
+0x00000A,    // \n (换行)
+0x00000B,    // \r (回车)
 0x00000C,
 0x00000D,
-0x000020,
-0x000085,
-0x0000A0,
-0x001680,
-0x002000,
+0x000020,    // 空格
+0x000085,    // 下一行 (Next Line)
+0x0000A0,    // 不间断空格
+0x001680,    //  
+0x002000,    // 空格
 0x002001,
 0x002002,
 0x002003,
@@ -5202,6 +5202,7 @@ const std::initializer_list<std::pair<uint32_t, uint32_t>> unicode_map_uppercase
 {0x01E943, 0x01E921},
 };
 
+// Unicode 规范化分解(Normalization Form Decomposition)
 const std::initializer_list<range_nfd> unicode_ranges_nfd = {  // start, last, nfd
 {0x000000, 0x000000, 0x000000},
 {0x0000C0, 0x0000C5, 0x000041},

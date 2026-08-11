@@ -573,9 +573,11 @@ llama_model_loader::llama_model_loader(
             throw std::runtime_error(format("%s: failed to load model from %s", __func__, fname.c_str()));
         }
 
+        // 更新 architecture
         get_key(llm_kv(LLM_KV_GENERAL_ARCHITECTURE), arch_name, false);
         llm_kv = LLM_KV(llm_arch_from_string(arch_name));
 
+        // 模型文件
         files.emplace_back(new llama_file(fname.c_str(), "rb", use_direct_io));
         contexts.emplace_back(ctx);
 
@@ -600,14 +602,15 @@ llama_model_loader::llama_model_loader(
             // make sure the main file is loaded first
             uint16_t idx = 0;
             const std::string kv_split_no = llm_kv(LLM_KV_SPLIT_NO);
-            get_key(kv_split_no, idx);
+            get_key(kv_split_no, idx);    // 当前的分片索引
+            // 必须从第一个分片开始加载
             if (idx != 0) {
                 throw std::runtime_error(format("illegal split file idx: %d (file: %s), model must be loaded with the first split", idx, fname.c_str()));
             }
 
             // generate list of splits if needed
             if (splits.empty()) {
-                splits = llama_get_list_splits(fname, idx, n_split);
+                splits = llama_get_list_splits(fname, idx, n_split);    // 生成所有分片文件名
             }
 
             // in case user give a custom list of splits, check if it matches the expected number
@@ -638,7 +641,7 @@ llama_model_loader::llama_model_loader(
                     if (kid < 0) {
                         throw std::runtime_error(format("missing key %s in GGUF split %s", kv_split_no.c_str(), fname_split));
                     }
-                    int idx_gguf = gguf_get_val_u16(ctx_gguf.get(), kid);
+                    int idx_gguf = gguf_get_val_u16(ctx_gguf.get(), kid);    // 当前的分片索引
                     if (idx_gguf != idx) {
                         throw std::runtime_error(format("invalid split file idx: %d (file: %s), expected %d", idx_gguf, fname_split, idx));
                     }
@@ -660,6 +663,7 @@ llama_model_loader::llama_model_loader(
                 }
             }
 
+            // LLM_KV_SPLIT_TENSORS_COUNT 通常只需要存在于第一个分片文件，表示 tensor 总数
             get_key(llm_kv(LLM_KV_SPLIT_TENSORS_COUNT), n_tensors);
 
             // sanity check
@@ -708,7 +712,7 @@ llama_model_loader::llama_model_loader(
     }
 
     n_kv      = gguf_get_n_kv(metadata);
-    n_tensors = weights_map.size();
+    n_tensors = weights_map.size();    // 考虑到分片，用 weights_map 更合理
 
     fver = (enum llama_fver) gguf_get_version(metadata);
 
@@ -717,6 +721,7 @@ llama_model_loader::llama_model_loader(
 
     // determine file type based on the number of tensors for each quantization and print meta data
     // TODO: make optional
+    // 通过统计所有 tensor 的数据类型来判断模型最有可能的数据类型
     {
         std::map<enum ggml_type, uint32_t> n_type;
 
@@ -780,7 +785,7 @@ llama_model_loader::llama_model_loader(
         }
 
         // this is a way to mark that we have "guessed" the file type
-        ftype = (llama_ftype) (ftype | LLAMA_FTYPE_GUESSED);
+        ftype = (llama_ftype) (ftype | LLAMA_FTYPE_GUESSED);    // 标记是 猜的
 
         {
             uint32_t ftype_val = 0;
@@ -791,6 +796,7 @@ llama_model_loader::llama_model_loader(
 
         LLAMA_LOG_INFO("%s: Dumping metadata keys/values. Note: KV overrides do not apply in this output.\n", __func__);
 
+        // only for log
         for (int i = 0; i < n_kv; i++) {
             const char * name           = gguf_get_key(metadata, i);
             const enum gguf_type type   = gguf_get_kv_type(metadata, i);
@@ -1327,6 +1333,7 @@ struct ggml_tensor * llama_model_loader::create_tensor(
     }
 
     LLAMA_LOG_DEBUG("%s: loading tensor %s\n", __func__, tn.str().c_str());
+    // 维度校验
     const struct ggml_tensor * cur = check_tensor_dims(tn.str(), ne, !(flags & TENSOR_NOT_REQUIRED), flags & TENSOR_ALLOW_RESHAPE);
     if (cur == NULL) {
         return NULL;
@@ -1467,7 +1474,7 @@ const void * llama_model_loader::load_data_range(const llama_tensor_weight & w, 
     const void * data = buf;
 
     if (use_mmap) {
-        data = (const uint8_t *) mappings.at(w.idx)->addr() + w.offs + offs;
+        data = (const uint8_t *) mappings.at(w.idx)->addr() + w.offs + offs;    // 获取 mmap 后的地址，避免当前 tensor 的数据拷贝
     } else {
         GGML_ASSERT(buf != nullptr);
         GGML_ASSERT(w.idx < files.size());
@@ -1621,7 +1628,7 @@ bool llama_model_loader::load_all_data(
             if (bufs.count(weight->idx)) {
                 buf_mmap = bufs.at(weight->idx);
             }
-            uint8_t * data = (uint8_t *) mapping->addr() + weight->offs;
+            uint8_t * data = (uint8_t *) mapping->addr() + weight->offs;    // 获取 mmap 后的地址，避免当前 tensor 的数据拷贝
 
             if (check_tensors) {
                 validation_result.emplace_back(std::async(std::launch::async, [cur, data, n_size] {

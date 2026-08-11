@@ -43,6 +43,7 @@ struct llama_model_loader {
                 throw std::runtime_error(format("tensor '%s' not found in the model", ggml_get_name(tensor)));
             }
 
+            // 当前 tensor 在模型文件中的整体 offset
             offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
             if (offs + ggml_nbytes(tensor) < offs || offs + ggml_nbytes(tensor) > file->size()) {
                 throw std::runtime_error(format("tensor '%s' data is not within the file bounds, model is corrupted or incomplete", ggml_get_name(tensor)));
@@ -64,19 +65,20 @@ struct llama_model_loader {
         }
     };
 
-    static const int TENSOR_NOT_REQUIRED    = 1 << 0;
-    static const int TENSOR_DUPLICATED      = 1 << 1;
-    static const int TENSOR_SKIP            = 1 << 2;
-    static const int TENSOR_SKIP_IF_VIRTUAL = 1 << 3;
-    static const int TENSOR_ALLOW_RESHAPE   = 1 << 4;
+    // 0 表示必须存在的正常张量，缺失则报错
+    static const int TENSOR_NOT_REQUIRED    = 1 << 0;    // 非必须张量，如果文件中没有，可以跳过并不报错
+    static const int TENSOR_DUPLICATED      = 1 << 1;    // 逻辑上重复使用另一个张量的数据
+    static const int TENSOR_SKIP            = 1 << 2;    // 主动跳过，不加载该张量（用于节省内存）
+    static const int TENSOR_SKIP_IF_VIRTUAL = 1 << 3;    // 仅在虚拟模型（如只加载元数据）时跳过
+    static const int TENSOR_ALLOW_RESHAPE   = 1 << 4;    // 允许张量形状变换
     static const int TENSOR_READ_LAZY       = 1 << 5; // read rows on demand instead of loading whole tensor; requires mmap for now
 
     int n_kv      = 0;
     int n_tensors = 0;
     int n_created = 0;
 
-    uint64_t n_elements = 0;
-    size_t   n_bytes    = 0;
+    uint64_t n_elements = 0;    // 整个模型的总元素
+    size_t   n_bytes    = 0;    // 整个模型的总字节数
 
     bool use_mmap = false;
     bool use_direct_io = false;

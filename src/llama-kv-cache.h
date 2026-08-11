@@ -36,11 +36,11 @@ public:
         using idx_vec_t = std::vector<uint32_t>;
 
         // number of streams: ns = s1 - s0 + 1
-        uint32_t s0;
-        uint32_t s1;
+        uint32_t s0;    // 该批次使用的流（stream）的起始索引
+        uint32_t s1;    // 该批次使用的流（stream）的结束索引
 
-        std::vector<llama_seq_id> strm; // [ns]
-        std::vector<idx_vec_t>    idxs; // [ns]
+        std::vector<llama_seq_id> strm; // [ns]    长度为 ns，存储每个流对应的序列 ID（seq_id）
+        std::vector<idx_vec_t>    idxs; // [ns]    长度为 ns，每个元素是一个 uint32_t 向量，存储该流中需要处理的 token 在批次中的位置索引
 
         uint32_t head() const {
             GGML_ASSERT(idxs.size() == 1);
@@ -99,18 +99,18 @@ public:
     llama_kv_cache(
             const llama_model & model,
           const llama_hparams & hparams,
-                    ggml_type   type_k,
-                    ggml_type   type_v,
-                         bool   v_trans,
-                         bool   offload,
-                         bool   unified,
-                     uint32_t   kv_size,
-                     uint32_t   n_seq_max,
-                     uint32_t   n_pad,
-                     uint32_t   n_swa,
-               llama_swa_type   swa_type,
-               llama_memory_t   mem_other,
-        const layer_filter_cb & filter,
+                    ggml_type   type_k,    // K 数据类型
+                    ggml_type   type_v,    // V 数据类型
+                         bool   v_trans,    // 标记 V 缓存是否应被转置
+                         bool   offload,    // 标记是否将 KV 缓存从 CPU 内存卸载（offload）到 GPU 等加速器内存中
+                         bool   unified,    // 标记是否使用统一的 KV 缓存实现
+                     uint32_t   kv_size,    // 缓存可以容纳的最大 token 数量（即上下文长度）
+                     uint32_t   n_seq_max,    // 以同时处理的最大 sequence 数量
+                     uint32_t   n_pad,    // 内存对齐的填充（padding）大小
+                     uint32_t   n_swa,    // 指定了滑动窗口的大小    Sparse Window Attention
+               llama_swa_type   swa_type,    // 定义 swa 的具体类型
+               llama_memory_t   mem_other,    // 用于传递其他与内存相关的配置或上下文信息
+        const layer_filter_cb & filter,    // 回调函数（callback），用于在初始化时过滤（filter）哪些层（layer）需要被包含在缓存中
         const  layer_reuse_cb & reuse,
         const  layer_share_cb & share,
         // a model can hold more than one cache, so the tensor names have to stay unique
@@ -262,7 +262,7 @@ private:
     bool v_trans = true;  // the value tensor is transposed
 
     const uint32_t n_seq_max = 1;
-    const uint32_t n_stream  = 1;
+    const uint32_t n_stream  = 1;    // 当 n_stream > 1 时，KV缓存会被分割成多个独立的“流”，每个流专属于一个序列。这种模式的核心价值在于实现了不同序列间KV缓存的物理隔离。
 
     // required padding
     const uint32_t n_pad = 1;
@@ -276,8 +276,8 @@ private:
 
     // if all layers participating in the cache have constant head size, the value is stored here
     // otherwise the value is -1
-    int32_t n_embd_head_k_all = 0;
-    int32_t n_embd_head_v_all = 0;
+    int32_t n_embd_head_k_all = 0;    // K 的总维度（所有注意力头的 K 维度之和）
+    int32_t n_embd_head_v_all = 0;    // V 的总维度（所有注意力头的 V 维度之和）
 
     // pre-computed hadamard martrices
     std::unordered_map<int64_t, std::vector<float>> attn_rot_hadamard;

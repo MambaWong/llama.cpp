@@ -1159,13 +1159,13 @@ struct llama_model::impl {
     std::map<ggml_backend_dev_t, buft_list_t> gpu_buft_list;
 
     struct layer_dev {
-        ggml_backend_dev_t dev;
-        buft_list_t * buft_list;
+        ggml_backend_dev_t dev;    // 设备
+        buft_list_t * buft_list;    // 后端缓冲区类型列表
     };
 
-    layer_dev dev_input = {};
-    layer_dev dev_output = {};
-    std::vector<layer_dev> dev_layer;
+    layer_dev dev_input = {};    // 输入层
+    layer_dev dev_output = {};    // 输出层
+    std::vector<layer_dev> dev_layer;    // 中间层
 
     bool has_tensor_overrides;
 
@@ -1399,6 +1399,7 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
 
     this->ml = &ml; // to be used by create_tensor() and load_arch_tensors()
 
+    // 根据后端设备是否支持 mmap 来调整 use_mmap
     if (ml.use_mmap && params.load_mode == LLAMA_LOAD_MODE_AUTO) {
         for (const auto & dev : devices) {
             ggml_backend_dev_props props;
@@ -1410,6 +1411,7 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
         }
     }
 
+    // "mmap"
     const char * load_mode_name = params.load_mode == LLAMA_LOAD_MODE_AUTO
         ? llama_load_mode_name(ml.use_mmap ? LLAMA_LOAD_MODE_MMAP : LLAMA_LOAD_MODE_NONE)
         : llama_load_mode_name(params.load_mode);
@@ -1426,6 +1428,7 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
         pimpl->gpu_buft_list.emplace(dev.dev, std::move(buft_list));
     }
 
+    // CPU 后端设备
     ggml_backend_dev_t cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
     if (cpu_dev == nullptr) {
         throw std::runtime_error(format("%s: no CPU backend found", __func__));
@@ -1464,8 +1467,12 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
         splits[i] /= split_sum;
     }
 
+    // 将模型的前几层放在 CPU 上，将后面的层放在 GPU 上
+    // GPU 层开始的索引
     const int i_gpu_start = std::max(n_layer_all + 1 - n_gpu_layers, 0);
+    // 实际分配到 GPU 的层数
     const int act_gpu_layers = devices.empty() ? 0 : std::min(n_gpu_layers, n_layer_all + 1);
+    // 为每一层（il）分配后端设备
     auto get_layer_buft_list = [&](int il) -> llama_model::impl::layer_dev {
         const bool is_swa = il < n_layer_all && hparams.is_swa(il);
         if (il < i_gpu_start || (il - i_gpu_start) >= act_gpu_layers) {
@@ -1508,6 +1515,7 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
         layers.resize(n_layer_all);
 
         // call the per-model loading function
+        // 加载模型架构相关的张量数据
         load_arch_tensors(ml);
 
         // generic pass: load optional per-tensor/per-expert ".scale" tensors (e.g. NVFP4 scale2)
@@ -1860,6 +1868,7 @@ const float * llama_model::tensor_split() const {
     return params.tensor_split;
 }
 
+// 如果有通过参数指定 GPU 层数，则直接使用指定的数
 uint32_t llama_model::n_gpu_layers() const {
     // note: plus 1 for the "output" layer
     return params.n_gpu_layers >= 0 ? params.n_gpu_layers : hparams.n_layer_all + 1;

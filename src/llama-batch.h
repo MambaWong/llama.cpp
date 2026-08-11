@@ -12,6 +12,7 @@
 #include <unordered_map>
 
 // keep this struct lightweight
+// micro-batch
 struct llama_ubatch {
     bool equal_seqs() const {
         return b_equal_seqs != 0;
@@ -69,6 +70,7 @@ struct llama_ubatch {
 };
 
 // a helper for sanitizing, fulfilling and splitting a batch
+// batch allocator
 class llama_batch_allocr {
 public:
     llama_batch_allocr(uint32_t n_pos_per_embd);
@@ -77,10 +79,10 @@ public:
     // memory is optional. if provided will be used to check for sequence continuity and to determine the positions
     bool init(
             const llama_batch & batch_inp,
-            const llama_vocab & vocab,
+            const llama_vocab & vocab,        // 如果省略 vocab，就无法做 token 合法性检查，非法 token 会静默传入 GPU kernel 导致 UB 或垃圾输出。
             const llama_memory_i * memory,
             uint32_t n_embd,
-            uint32_t n_seq_max,
+            uint32_t n_seq_max,    // 最大并发序列数
             bool output_all);
 
     const llama_batch & get_batch() const;

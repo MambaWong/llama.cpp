@@ -8,13 +8,13 @@
 struct unicode_cpt_flags {
     enum {
         UNDEFINED       = 0x0001,
-        NUMBER          = 0x0002,  // regex: \p{N}
-        LETTER          = 0x0004,  // regex: \p{L}
-        SEPARATOR       = 0x0008,  // regex: \p{Z}
-        ACCENT_MARK     = 0x0010,  // regex: \p{M}
-        PUNCTUATION     = 0x0020,  // regex: \p{P}
-        SYMBOL          = 0x0040,  // regex: \p{S}
-        CONTROL         = 0x0080,  // regex: \p{C}
+        NUMBER          = 0x0002,  // regex: \p{N}    所有数字
+        LETTER          = 0x0004,  // regex: \p{L}    所有字母
+        SEPARATOR       = 0x0008,  // regex: \p{Z}    所有空白分隔符
+        ACCENT_MARK     = 0x0010,  // regex: \p{M}    所有组合标记
+        PUNCTUATION     = 0x0020,  // regex: \p{P}    所有标点符号
+        SYMBOL          = 0x0040,  // regex: \p{S}    所有符号
+        CONTROL         = 0x0080,  // regex: \p{C}    所有不可见控制字符
         MASK_CATEGORIES = 0x00FF,
         WHITESPACE      = 0x0100,
         LOWERCASE       = 0x0200,

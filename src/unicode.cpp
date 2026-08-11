@@ -13,12 +13,19 @@
 #include <utility>
 #include <vector>
 
+// 一个字节     00xx                            U+0000 ~ U+007F
+// 二个字节     110xxxxx 10xxxxxx               U+0080 ~ U+07FF
+// 三个字节     1110xxxx 10xxxxxx 10xxxxxx      U+0800 ~ U+FFFF
+// 四个字节     11110xxx 10xxxxxx 10xxxxxx      U+10000 ~ U+10FFFF
+
+// UTF-8 占用的字节数
 size_t unicode_len_utf8(char src) {
-    const size_t lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
+    const size_t lookup[16] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
     uint8_t highbits = static_cast<uint8_t>(src) >> 4;
     return lookup[highbits];
 }
 
+// Unicode Code Point 转 UTF-8
 static std::string unicode_cpts_to_utf8(const std::vector<uint32_t> & cps) {
     std::string result;
     for (size_t i = 0; i < cps.size(); ++i) {
@@ -27,16 +34,20 @@ static std::string unicode_cpts_to_utf8(const std::vector<uint32_t> & cps) {
     return result;
 }
 
+// UTF-8 转 Unicode Code Point
 uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset) {
     assert(offset < utf8.size());
+    // 最高位为 0，即占用 1 个字节，直接返回即可
     if (!(utf8[offset + 0] & 0x80)) {
         auto result = utf8[offset + 0];
         offset += 1;
         return result;
     }
+    // 多字节的首字节第二位必须是 1    110xxxxx / 1110xxxx / 11110xxx
     if (!(utf8[offset + 0] & 0x40)) {
         throw std::invalid_argument("invalid character");
     }
+    // 2 个字节    110xxxxx 10xxxxxx
     if (!(utf8[offset + 0] & 0x20)) {
         if (offset + 1 >= utf8.size() || ! ((utf8[offset + 1] & 0xc0) == 0x80)) {
             throw std::invalid_argument("invalid character");
@@ -45,6 +56,7 @@ uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset) {
         offset += 2;
         return result;
     }
+    // 3 个字节    1110xxxx 10xxxxxx 10xxxxxx
     if (!(utf8[offset + 0] & 0x10)) {
         if (offset + 2 >= utf8.size() || ! ((utf8[offset + 1] & 0xc0) == 0x80) || ! ((utf8[offset + 2] & 0xc0) == 0x80)) {
             throw std::invalid_argument("invalid character");
@@ -53,6 +65,7 @@ uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset) {
         offset += 3;
         return result;
     }
+    // 4 个字节    11110xxx 10xxxxxx 10xxxxxx
     if (!(utf8[offset + 0] & 0x08)) {
         if (offset + 3 >= utf8.size() || ! ((utf8[offset + 1] & 0xc0) == 0x80) || ! ((utf8[offset + 2] & 0xc0) == 0x80) || !((utf8[offset + 3] & 0xc0) == 0x80)) {
             throw std::invalid_argument("invalid character");
@@ -472,6 +485,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
 
 // Qwen2 system regex: "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
 static std::vector<size_t> unicode_regex_split_custom_qwen2(const std::string & text, const std::vector<size_t> & offsets) {
+    // 存储的是每个 token 的长度（即相对于前一个 token 结束位置的偏移增量），而不是从文本开头的绝对位置
     std::vector<size_t> bpe_offsets; // store the offset of each word
     bpe_offsets.reserve(offsets.size()); // Reserve memory for the approximate size
 
@@ -1085,24 +1099,29 @@ static std::vector<size_t> unicode_regex_split_custom(const std::string & text, 
 // interface
 //
 
+// Unicode Code Point 转 UTF-8
 std::string unicode_cpt_to_utf8(uint32_t cpt) {
     std::string result;
 
+    // 1 字节    U+0000 ~ U+007F
     if (/* 0x00 <= cpt && */ cpt <= 0x7f) {
         result.push_back(cpt);
         return result;
     }
+    // 2 字节    U+0080 ~ U+07FF    110xxxxx 10xxxxxx
     if (0x80 <= cpt && cpt <= 0x7ff) {
         result.push_back(0xc0 | ((cpt >> 6) & 0x1f));
         result.push_back(0x80 | (cpt & 0x3f));
         return result;
     }
+    // 3 字节    U+0800 ~ U+FFFF    1110xxxx 10xxxxxx 10xxxxxx
     if (0x800 <= cpt && cpt <= 0xffff) {
         result.push_back(0xe0 | ((cpt >> 12) & 0x0f));
         result.push_back(0x80 | ((cpt >> 6) & 0x3f));
         result.push_back(0x80 | (cpt & 0x3f));
         return result;
     }
+    // 4 字节    U+10000 ~ U+10FFFF    11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
     if (0x10000 <= cpt && cpt <= 0x10ffff) {
         result.push_back(0xf0 | ((cpt >> 18) & 0x07));
         result.push_back(0x80 | ((cpt >> 12) & 0x3f));
@@ -1169,6 +1188,7 @@ uint8_t unicode_utf8_to_byte(const std::string & utf8) {
     return map.at(utf8);
 }
 
+// 查表 大小转小写
 uint32_t unicode_tolower(uint32_t cpt) {
     // binary search
     auto it = std::lower_bound(unicode_map_lowercase.begin(), unicode_map_lowercase.end(), cpt,
@@ -1286,7 +1306,7 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
         }
     }
 
-    std::vector<size_t> bpe_offsets = { cpts.size() };
+    std::vector<size_t> bpe_offsets = { cpts.size() };    // initializer_list
 
     for (const auto & regex_expr : regex_exprs) {
         // first, see if we have an efficient custom regex implementation

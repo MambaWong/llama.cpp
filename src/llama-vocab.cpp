@@ -2425,6 +2425,7 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
         throw std::runtime_error(format("invalid gguf type for %s", kv(LLM_KV_TOKENIZER_LIST).c_str()));
     }
 
+    // 获取 token 的数量
     const uint32_t n_tokens = gguf_get_arr_n(ctx, token_idx);
 
     const float * scores = nullptr;
@@ -3916,6 +3917,7 @@ llama_token llama_vocab::byte_to_token(uint8_t ch) const {
     switch (get_type()) {
         case LLAMA_VOCAB_TYPE_SPM:
         case LLAMA_VOCAB_TYPE_UGM: {
+            // 将不可见的 ASCII 十进制值转换为十六进制值，便于查表转换为 Token ID
             const char buf[7] = { '<', '0', 'x', hex[ch >> 4], hex[ch & 15], '>', 0 };
             auto token = pimpl->token_to_id.find(buf);
             if (token != pimpl->token_to_id.end()) {

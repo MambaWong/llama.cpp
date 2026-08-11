@@ -487,8 +487,9 @@ private:
     bool has_shift = false;
 
     // set of indices of used cells (i.e. pos[i] != -1, allowed to not have any seq_id)
-    std::set<uint32_t> used;
+    std::set<uint32_t> used;    // 记录当前正在被使用的 slot
 
+    // 记录每个 cell 中 token 的位置索引 (Position ID)。这是最核心的元数据，用于注意力机制计算位置编码。
     std::vector<llama_pos> pos;
 
     // stores extra info per cell

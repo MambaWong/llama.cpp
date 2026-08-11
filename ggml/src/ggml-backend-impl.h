@@ -213,8 +213,8 @@ extern "C" {
     };
 
     struct ggml_backend_device {
-        struct ggml_backend_device_i iface;
-        ggml_backend_reg_t reg;
+        struct ggml_backend_device_i iface;    // 设备接口
+        ggml_backend_reg_t reg;    // 后端接口
         void * context;
     };
 

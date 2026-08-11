@@ -751,6 +751,7 @@ struct LLM_TN_IMPL {
     }
 };
 
+// Tensor Name
 struct LLM_TN {
     LLM_TN(llm_arch arch) : arch(arch) {}
 

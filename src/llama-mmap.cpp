@@ -391,7 +391,7 @@ struct llama_file::impl {
     size_t alignment = 1;
 
     FILE * fp{};
-    size_t size{};
+    size_t size{};    // 文件总长度
     bool owns_fp = true;
 };
 
@@ -658,8 +658,8 @@ struct llama_mmap::impl {
     }
 #endif
 
-    void * addr;
-    size_t size;
+    void * addr;    // 映射后的数据地址
+    size_t size;    // 映射总长度
 };
 
 llama_mmap::llama_mmap(struct llama_file * file, size_t prefetch, bool numa,

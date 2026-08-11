@@ -41,6 +41,7 @@ struct llama_hparams_convnext {
     uint32_t n_layer;
 };
 
+// hyper parameters
 struct llama_hparams {
     // note: use the `_impl` suffix to avoid name conflict between members and getters
     //       for example: n_embd_out() vs n_embd_out_impl
@@ -61,8 +62,9 @@ struct llama_hparams {
     // granite-switch: index of the single-head "router" KV layer that encodes
     // per-token adapter selection. -1 when the model has no such layer.
     int32_t  router_layer = -1;
-    uint32_t n_expert = 0;
-    uint32_t n_expert_used = 0;
+    // 混合专家模型（MoE, Mixture of Experts）
+    uint32_t n_expert = 0;    // 专家总数: 代表整个模型层中所有可用专家的数量
+    uint32_t n_expert_used = 0;    // 激活专家数: 代表在处理每一个词元（token） 时，实际被激活并参与计算的专家数量
     uint32_t n_rel_attn_bkts = 0;
 
     // TODO: this needs to be reworked

@@ -299,6 +299,7 @@ static bool llama_prepare_model_devices(const llama_model_params & params, llama
         }
     }
 
+    // only for log
     for (const auto & dev : model->devices) {
         ggml_backend_dev_props props;
         ggml_backend_dev_get_props(dev.dev, &props);
@@ -384,6 +385,7 @@ static struct llama_model * llama_model_load_from_file_impl(
         std::vector<std::string> & splits,
         FILE * file,
         struct llama_model_params params) {
+    // 只能同时指定一个源用于加载模型
     {
         int n_sources_defined = 0;
         if (metadata != nullptr) {
@@ -402,11 +404,13 @@ static struct llama_model * llama_model_load_from_file_impl(
     }
     ggml_time_init();
 
+    // 如果不是 vocab_only，则需要有能够用于推理的后端
     if (!params.vocab_only && ggml_backend_reg_count() == 0) {
         LLAMA_LOG_ERROR("%s: no backends are loaded. hint: use ggml_backend_load() or ggml_backend_load_all() to load a backend before calling this function\n", __func__);
         return nullptr;
     }
 
+    // 回调函数用于打印加载进度
     unsigned cur_percentage = 0;
     if (params.progress_callback == NULL) {
         params.progress_callback_user_data = &cur_percentage;

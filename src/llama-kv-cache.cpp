@@ -40,16 +40,16 @@ static void ggml_gen_hadamard(ggml_tensor * tensor) {
         data = data_f32.data();
     }
 
-    data[0*n + 0] = 1.0 / sqrtf(n);
+    data[0*n + 0] = 1.0 / sqrtf(n);    // 左上角
 
     for (int s = 1; s < n; s *= 2) {
         for (int i = 0; i < s; i++) {
             for (int j = 0; j < s; j++) {
                 const float val = data[i*n + j];
 
-                data[(i + s)*n + (j    )] =  val;
-                data[(i    )*n + (j + s)] =  val;
-                data[(i + s)*n + (j + s)] = -val;
+                data[(i + s)*n + (j    )] =  val;    // 左下角
+                data[(i    )*n + (j + s)] =  val;    // 右上角
+                data[(i + s)*n + (j + s)] = -val;    // 右下角
             }
         }
     }
@@ -1020,11 +1020,12 @@ llama_kv_cache::slot_info llama_kv_cache::find_slot(const llama_ubatch & ubatch,
 
         while (true) {
             if (head_cur + n_test > cells.size()) {
-                n_tested += cells.size() - head_cur;
+                n_tested += cells.size() - head_cur;    // 存在 cells.size() - head_cur 个连续可用的 slot
                 head_cur = 0;
                 continue;
             }
 
+            // 逐个验证
             for (uint32_t i = 0; i < n_test; i++) {
                 const auto idx = head_cur;
 
@@ -1062,22 +1063,25 @@ llama_kv_cache::slot_info llama_kv_cache::find_slot(const llama_ubatch & ubatch,
                 }
 
                 if (can_use) {
-                    res.idxs[s].push_back(idx);
+                    res.idxs[s].push_back(idx);    // 记录可用 slot
                 } else {
                     if (cont) {
-                        break;
+                        break;    // 连续模式：碰到不可用槽位就中断本次尝试
                     }
                 }
             }
 
+            // 找到了足够的 slot
             if (res.idxs[s].size() == n_tokens) {
                 break;
             }
 
+            // 连续模式但没找够，清空结果重新找
             if (cont) {
                 res.idxs[s].clear();
             }
 
+            // 遍历了整个缓存都没找到足够的 slot，返回空
             if (n_tested >= cells.size()) {
                 //LLAMA_LOG_ERROR("%s: failed to find a slot for %d tokens\n", __func__, n_tokens);
                 return { };
